@@ -18,7 +18,7 @@ app.add_middleware(
 
 # --- ASSIGNED CONFIGURATION ---
 ASSIGNED_API_KEY = "ak_382j7s7scuz2b8d47zm4blh0"
-STUDENT_EMAIL = "your_logged_in_email@example.com"  # ⚠️ REPLACE THIS with your actual IITM logged-in email
+STUDENT_EMAIL = "24f2005453@ds.study.iitm.ac.in"  # ⚠️ REPLACE THIS with your actual IITM logged-in email
 
 # --- MODELS ---
 class Event(BaseModel):
