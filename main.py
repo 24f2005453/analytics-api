@@ -1,26 +1,26 @@
-from fastapi import FastAPI, Header, HTTPException
+import os
+from typing import List, Dict, Any, Optional
+from fastapi import FastAPI, Header, HTTPException, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-from collections import defaultdict
 
-EMAIL = "24f2005453@ds.study.iitm.ac.in"
-API_KEY = "ak_382j7s7scuz2b8d47zm4blh0"
+app = FastAPI(title="IITM TDS Assignment - Analytics Endpoint")
 
-app = FastAPI()
-
-# CORS
+# --- CORS CONFIGURATION ---
+# Allows cross-origin requests from the grader's browser page directly
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ----------------------------
-# Models
-# ----------------------------
+# --- ASSIGNED CONFIGURATION ---
+ASSIGNED_API_KEY = "ak_382j7s7scuz2b8d47zm4blh0"
+STUDENT_EMAIL = "your_logged_in_email@example.com"  # ⚠️ REPLACE THIS with your actual IITM logged-in email
 
+# --- MODELS ---
 class Event(BaseModel):
     user: str
     amount: float
@@ -29,55 +29,56 @@ class Event(BaseModel):
 class AnalyticsRequest(BaseModel):
     events: List[Event]
 
-# ----------------------------
-# Health
-# ----------------------------
-
-@app.get("/")
-def root():
-    return {"status": "ok"}
-
-# ----------------------------
-# Analytics
-# ----------------------------
+# --- ENDPOINT ---
 
 @app.post("/analytics")
-def analytics(
-    request: AnalyticsRequest,
-    x_api_key: str | None = Header(default=None, alias="X-API-Key")
+async def post_analytics(
+    request_data: AnalyticsRequest,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key")
 ):
-    if x_api_key != API_KEY:
+    # 1. Authenticate via Header
+    if not x_api_key:
         raise HTTPException(
-            status_code=401,
-            detail="Unauthorized"
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Missing API Key"
+        )
+    if x_api_key != ASSIGNED_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid API Key"
         )
 
-    total_events = len(request.events)
+    events = request_data.events
 
-    unique_users = len(
-        {event.user for event in request.events}
-    )
+    # 2. Aggregation Logic
+    total_events = len(events)
+    
+    # Track unique users across all events
+    unique_users_set = set(e.user for e in events)
+    unique_users = len(unique_users_set)
 
+    # Initialize revenue tracking and user-specific positive spends
     revenue = 0.0
-    totals = defaultdict(float)
+    user_positive_revenue: Dict[str, float] = {}
 
-    for event in request.events:
-        if event.amount > 0:
-            revenue += event.amount
-            totals[event.user] += event.amount
+    for e in events:
+        if e.amount > 0:
+            revenue += e.amount
+            user_positive_revenue[e.user] = user_positive_revenue.get(e.user, 0.0) + e.amount
 
+    # Find the top user based on highest positive-amount total
     top_user = ""
+    if user_positive_revenue:
+        top_user = max(user_positive_revenue, key=user_positive_revenue.get)
+    else:
+        # Fallback if no events contain positive amounts
+        top_user = ""
 
-    if totals:
-        top_user = max(
-            totals,
-            key=totals.get
-        )
-
+    # 3. Formulate Response payload exactly per specification
     return {
-        "email": EMAIL,
+        "email": STUDENT_EMAIL,
         "total_events": total_events,
         "unique_users": unique_users,
-        "revenue": revenue,
+        "revenue": round(revenue, 2),  # Rounds safely for potential float precision issues
         "top_user": top_user
     }
